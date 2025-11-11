@@ -1,0 +1,5 @@
+streamlit
+matplotlib
+# Tambahkan library lain jika ada, contoh:
+pandas
+numpy
