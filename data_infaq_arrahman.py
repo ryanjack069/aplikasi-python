@@ -4,9 +4,10 @@ import pandas as pd
 from io import StringIO
 import json
 
-# --- PENTING: st.set_page_config HARUS DI SINI! ---
+# --- PENTING: st.set_page_config HARUS MENJADI PANGGILAN FUNGSI PERTAMA ---
+# Kita pindahkan semua konstanta ke bawah ini.
 st.set_page_config(layout="centered", title="Pencarian dan Input Data Infaq Arrahman")
-# --------------------------------------------------
+# -------------------------------------------------------------------------
 
 # --- Kredensial dan Konstanta ---
 # Pastikan Anda memasukkan SEMUA nilai ini di Streamlit Cloud Secrets!
@@ -39,7 +40,6 @@ def get_access_token():
             st.error("Gagal mendapatkan Access Token baru. Respons API: " + str(data))
             return None
     except Exception as e:
-        # Jika kode gagal membaca secrets atau koneksi
         st.error(f"Error saat mengambil token. Cek Streamlit Secrets. Error: {e}")
         return None
 
@@ -50,8 +50,6 @@ def fetch_zoho_data(workbook_id, worksheet_name):
     if not access_token:
         return pd.DataFrame()
 
-    # --- ENDPOINT YANG SUDAH DIKOREKSI ---
-    # Menggunakan endpoint /rows yang lebih spesifik
     api_url = f"https://sheet.zoho.com/api/v2/workbooks/{workbook_id}/worksheets/{worksheet_name}/rows"
     
     headers = {
@@ -61,11 +59,9 @@ def fetch_zoho_data(workbook_id, worksheet_name):
 
     try:
         data_response = requests.get(api_url, headers=headers)
-        data_response.raise_for_status() # Cek status 4xx/5xx
+        data_response.raise_for_status() 
         
-        # Baca data CSV langsung ke Pandas DataFrame
         csv_data = StringIO(data_response.text)
-        # Asumsikan baris pertama adalah header
         df = pd.read_csv(csv_data) 
         
         return df
@@ -74,9 +70,7 @@ def fetch_zoho_data(workbook_id, worksheet_name):
         st.error(f"Gagal mengambil data dari Zoho Sheet: {e}")
         st.error(f"URL yang dicoba: {api_url}")
         
-        # Coba tampilkan pesan error API dari Zoho
         try:
-            # Perlu dipastikan response.text berisi JSON jika status code 4xx/5xx
             st.json(json.loads(data_response.text))
         except:
              st.info("Pastikan nama Worksheet dan Workbook ID sudah benar.")
@@ -87,7 +81,7 @@ def fetch_zoho_data(workbook_id, worksheet_name):
 
 def input_data_to_zoho(workbook_id, target_worksheet_name, data_to_insert):
     """Placeholder untuk fungsi input data."""
-    st.warning("Fungsi Input Data saat ini dinonaktifkan. Perlu WorkSheet tujuan dan pemetaan kolom.")
+    st.warning("Fungsi Input Data saat ini dinonaktifkan.")
     return False, "Input dinonaktifkan"
 
 
@@ -98,9 +92,7 @@ def app_layout(df):
     st.title("💰 Pencarian dan Input Data Infaq Arrahman")
     st.markdown("---")
 
-    # Ambil nilai unik untuk dropdown dari DataFrame yang dimuat
     try:
-        # Asumsi kolom 0, 1, 2 adalah NAMA, BULAN, JUMAT KE
         nama_options = df.iloc[:, 0].dropna().unique().tolist()
         bulan_options = df.iloc[:, 1].dropna().unique().tolist()
         jumat_options = df.iloc[:, 2].dropna().unique().tolist()
@@ -112,7 +104,6 @@ def app_layout(df):
 
 
     # --- Bagian A: PENCARIAN TANGGUNGAN INFAQ ---
-    
     st.header("PENCARIAN TANGGUNGAN INFAQ")
 
     col1, col2, col3 = st.columns(3)
@@ -125,12 +116,10 @@ def app_layout(df):
         selected_jumat_cari = st.selectbox("JUMAT KE", options=jumat_options, key="jumat_cari")
     
     # --- Logika Pencarian Data ---
-    
     tanggungan_val = "Data Tidak Ditemukan"
     total_setahun_val = "-"
     
     try:
-        # PENTING: Gunakan kolom index (iloc) karena nama kolom DF mungkin berbeda dari Zoho Sheet
         filtered_data = df[
             (df.iloc[:, 0].astype(str) == str(selected_nama_cari)) &
             (df.iloc[:, 1].astype(str) == str(selected_bulan_cari)) &
@@ -138,34 +127,23 @@ def app_layout(df):
         ]
         
         if not filtered_data.empty:
-            # Asumsi Tanggungan di Kolom ke-4 (Index 3) dan Total Setahun di Kolom ke-5 (Index 4)
-            # Anda MUNGKIN perlu menyesuaikan index kolom ini (3 dan 4)
             tanggungan_val = filtered_data.iloc[0, 3] 
             total_setahun_val = filtered_data.iloc[0, 4]
         
     except Exception as e:
         st.error(f"Error saat memfilter data: {e}")
-        tanggungan_val = "Error Filter"
-        total_setahun_val = "Error Filter"
 
-
-    # Tampilkan Hasil dalam format yang menarik
-    
+    # Tampilkan Hasil 
     st.markdown("---")
-    
-    # Menggunakan container untuk visualisasi kotak
     with st.container(border=True):
         st.subheader("HASIL PENCARIAN")
         st.markdown(f"**TANGGUNGAN:** &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`{tanggungan_val}`")
         st.markdown(f"**TOTAL SETAHUN:** &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`{total_setahun_val}`")
-    
     st.markdown("---")
 
     # --- Bagian B: PEMBAYARAN DAN INPUT DATA INFAQ ---
-
     st.header("PEMBAYARAN DAN INPUT DATA INFAQ")
     
-    # Form untuk Input Data
     with st.form("input_infaq_form", clear_on_submit=True):
         
         col4, col5 = st.columns(2)
@@ -178,7 +156,6 @@ def app_layout(df):
         with col5:
             jumat_input = st.selectbox("JUMAT KE", options=jumat_options, key="jumat_input")
             jumlah_infaq = st.number_input("JUMLAH INFAQ", min_value=0, value=0)
-            # Nilai Tanggungan diisi otomatis dari hasil pencarian
             st.text_input("TANGGUNGAN (dari hasil pencarian)", value=str(tanggungan_val), disabled=True) 
             input_data = st.number_input("INPUT DATA (Angka yang akan diinput)", min_value=0, value=0)
 
@@ -201,7 +178,6 @@ def main():
     data_df = fetch_zoho_data(workbook_id, WORKSHEET_NAME)
     
     if not data_df.empty:
-        # Jika berhasil memuat, lanjutkan ke layout
         st.info(f"Data Worksheet '{WORKSHEET_NAME}' berhasil dimuat. ({len(data_df)} baris, {len(data_df.columns)} kolom)")
         app_layout(data_df)
     else:
