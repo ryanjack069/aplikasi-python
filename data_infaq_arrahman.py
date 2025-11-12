@@ -6,7 +6,8 @@ import json
 
 # --- PENTING: st.set_page_config HARUS MENJADI PANGGILAN FUNGSI PERTAMA ---
 # Kita pindahkan semua konstanta ke bawah ini.
-st.set_page_config(layout="centered", title="Pencarian dan Input Data Infaq Arrahman")
+st.set_page_config(layout="centered") 
+# Judul halaman akan secara otomatis diambil dari st.title() atau nama file.
 # -------------------------------------------------------------------------
 
 # --- Kredensial dan Konstanta ---
@@ -185,3 +186,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
