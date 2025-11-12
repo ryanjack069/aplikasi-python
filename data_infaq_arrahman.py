@@ -12,7 +12,7 @@ st.set_page_config(layout="centered")
 
 # --- Kredensial dan Konstanta ---
 # SUMBER DATA UTAMA (Database Transaksi)
-WORKSHEET_NAME_DB = "DB BAYAR" 
+WORKSHEET_NAME_DB = "DBBAYAR" 
 WORKSHEET_NAME_INPUT = "PEMBAYARAN INFAQ" # Asumsi worksheet tujuan input 
 
 # --- 1. FUNGSI PENANGANAN ZOHO API ---
@@ -203,3 +203,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
