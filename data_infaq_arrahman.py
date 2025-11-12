@@ -4,12 +4,13 @@ import pandas as pd
 from io import StringIO
 import json
 
+# --- PENTING: st.set_page_config HARUS DI SINI! ---
+st.set_page_config(layout="centered", title="Pencarian dan Input Data Infaq Arrahman")
+# --------------------------------------------------
+
 # --- Kredensial dan Konstanta ---
 # Pastikan Anda memasukkan SEMUA nilai ini di Streamlit Cloud Secrets!
-# Gunakan nama worksheet yang paling mungkin benar berdasarkan error terakhir.
 WORKSHEET_NAME = "CARI DATA" 
-
-st.set_page_config(layout="centered", title="Pencarian dan Input Data Infaq Arrahman")
 
 # --- 1. FUNGSI PENANGANAN ZOHO API ---
 
@@ -35,7 +36,6 @@ def get_access_token():
         if 'access_token' in data:
             return data['access_token']
         else:
-            # Jika ada respons dari Zoho tapi tidak ada access_token
             st.error("Gagal mendapatkan Access Token baru. Respons API: " + str(data))
             return None
     except Exception as e:
@@ -76,23 +76,18 @@ def fetch_zoho_data(workbook_id, worksheet_name):
         
         # Coba tampilkan pesan error API dari Zoho
         try:
-            st.json(data_response.json())
+            # Perlu dipastikan response.text berisi JSON jika status code 4xx/5xx
+            st.json(json.loads(data_response.text))
         except:
-             st.info("Pastikan nama Worksheet dan Workbook ID sudah benar. Coba cek izin berbagi Zoho Sheet.")
+             st.info("Pastikan nama Worksheet dan Workbook ID sudah benar.")
         
         return pd.DataFrame()
 
 # --- 2. FUNGSI INPUT DATA KE ZOHO SHEET (Placeholder) ---
 
 def input_data_to_zoho(workbook_id, target_worksheet_name, data_to_insert):
-    # Implementasi ini membutuhkan WorkSheet tujuan yang berbeda,
-    # misalnya 'INPUT TRANSAKSI' yang terpisah dari 'CARI DATA'
-    
-    # --- Kode Input Data akan diletakkan di sini ---
+    """Placeholder untuk fungsi input data."""
     st.warning("Fungsi Input Data saat ini dinonaktifkan. Perlu WorkSheet tujuan dan pemetaan kolom.")
-    
-    # Contoh data_to_insert: {"col1": "value1", "col2": "value2"}
-    # return success, message 
     return False, "Input dinonaktifkan"
 
 
@@ -104,8 +99,8 @@ def app_layout(df):
     st.markdown("---")
 
     # Ambil nilai unik untuk dropdown dari DataFrame yang dimuat
-    # Hati-hati: Asumsi di bawah adalah NAMA, BULAN, JUMAT KE adalah 3 kolom pertama di sheet Anda.
     try:
+        # Asumsi kolom 0, 1, 2 adalah NAMA, BULAN, JUMAT KE
         nama_options = df.iloc[:, 0].dropna().unique().tolist()
         bulan_options = df.iloc[:, 1].dropna().unique().tolist()
         jumat_options = df.iloc[:, 2].dropna().unique().tolist()
@@ -131,27 +126,23 @@ def app_layout(df):
     
     # --- Logika Pencarian Data ---
     
-    # Catatan: Logika pencarian di bawah ini HANYA AKAN BERFUNGSI jika data sudah termuat
+    tanggungan_val = "Data Tidak Ditemukan"
+    total_setahun_val = "-"
     
-    # Asumsi: Kolom Tanggungan dan Total Setahun berada di kolom berikutnya
-    
-    # Filter DataFrame berdasarkan pilihan pengguna (Asumsi nama kolom di DF Anda)
     try:
-        # PENTING: Ganti 'Nama', 'Bulan', 'Jumat Ke' dengan nama kolom ACTUAL di Zoho Sheet Anda!
+        # PENTING: Gunakan kolom index (iloc) karena nama kolom DF mungkin berbeda dari Zoho Sheet
         filtered_data = df[
-            (df[df.columns[0]].astype(str) == str(selected_nama_cari)) &
-            (df[df.columns[1]].astype(str) == str(selected_bulan_cari)) &
-            (df[df.columns[2]].astype(str) == str(selected_jumat_cari))
+            (df.iloc[:, 0].astype(str) == str(selected_nama_cari)) &
+            (df.iloc[:, 1].astype(str) == str(selected_bulan_cari)) &
+            (df.iloc[:, 2].astype(str) == str(selected_jumat_cari))
         ]
         
         if not filtered_data.empty:
             # Asumsi Tanggungan di Kolom ke-4 (Index 3) dan Total Setahun di Kolom ke-5 (Index 4)
+            # Anda MUNGKIN perlu menyesuaikan index kolom ini (3 dan 4)
             tanggungan_val = filtered_data.iloc[0, 3] 
             total_setahun_val = filtered_data.iloc[0, 4]
-        else:
-            tanggungan_val = "Data Tidak Ditemukan"
-            total_setahun_val = "-"
-            
+        
     except Exception as e:
         st.error(f"Error saat memfilter data: {e}")
         tanggungan_val = "Error Filter"
@@ -188,7 +179,7 @@ def app_layout(df):
             jumat_input = st.selectbox("JUMAT KE", options=jumat_options, key="jumat_input")
             jumlah_infaq = st.number_input("JUMLAH INFAQ", min_value=0, value=0)
             # Nilai Tanggungan diisi otomatis dari hasil pencarian
-            st.text_input("TANGGUNGAN (dari hasil pencarian)", value=tanggungan_val, disabled=True) 
+            st.text_input("TANGGUNGAN (dari hasil pencarian)", value=str(tanggungan_val), disabled=True) 
             input_data = st.number_input("INPUT DATA (Angka yang akan diinput)", min_value=0, value=0)
 
         st.markdown("")
@@ -211,7 +202,7 @@ def main():
     
     if not data_df.empty:
         # Jika berhasil memuat, lanjutkan ke layout
-        st.success(f"Data Worksheet '{WORKSHEET_NAME}' berhasil dimuat. ({len(data_df)} baris)")
+        st.info(f"Data Worksheet '{WORKSHEET_NAME}' berhasil dimuat. ({len(data_df)} baris, {len(data_df.columns)} kolom)")
         app_layout(data_df)
     else:
         st.error("Gagal memuat data dari Zoho Sheet. Cek kredensial, koneksi, dan nama Worksheet/Workbook ID.")
