@@ -5,11 +5,11 @@ from io import StringIO
 import json
 
 # --- Kredensial dan Konstanta ---
-# Pastikan Anda memasukkan ini di Streamlit Cloud Secrets!
-WORKBOOK_ID = "urvny1df90546b51d4b899a0540380cabd33e"
-WORKSHEET_NAME = "CAR! DATA"
+# Pastikan Anda memasukkan SEMUA nilai ini di Streamlit Cloud Secrets!
+# Gunakan nama worksheet yang paling mungkin benar berdasarkan error terakhir.
+WORKSHEET_NAME = "CARI DATA" 
 
-st.set_page_config(layout="centered")
+st.set_page_config(layout="centered", title="Pencarian dan Input Data Infaq Arrahman")
 
 # --- 1. FUNGSI PENANGANAN ZOHO API ---
 
@@ -17,7 +17,9 @@ st.set_page_config(layout="centered")
 def get_access_token():
     """Menggunakan Refresh Token untuk mendapatkan Access Token baru dari Zoho."""
     try:
+        # Mengambil rahasia dari Streamlit Secrets
         secrets = st.secrets["zoho_api"]
+        
         url = "https://accounts.zoho.com/oauth/v2/token"
         payload = {
             'client_id': secrets["client_id"],
@@ -33,87 +35,65 @@ def get_access_token():
         if 'access_token' in data:
             return data['access_token']
         else:
-            st.error("Gagal mendapatkan Access Token baru. Cek Refresh Token.")
+            # Jika ada respons dari Zoho tapi tidak ada access_token
+            st.error("Gagal mendapatkan Access Token baru. Respons API: " + str(data))
             return None
     except Exception as e:
-        # Jika kode dijalankan secara lokal tanpa secrets.toml, ini akan muncul.
-        st.error("Error: Tidak dapat mengakses Zoho Secrets. Pastikan file secrets.toml atau Streamlit Secrets sudah terisi.")
+        # Jika kode gagal membaca secrets atau koneksi
+        st.error(f"Error saat mengambil token. Cek Streamlit Secrets. Error: {e}")
         return None
 
 @st.cache_data(ttl=600) 
 def fetch_zoho_data(workbook_id, worksheet_name):
-    """Mengambil data dari Zoho Sheet sebagai Pandas DataFrame (CSV format)."""
+    """Mengambil data dari Zoho Sheet sebagai Pandas DataFrame (CSV format) menggunakan endpoint /rows."""
     access_token = get_access_token()
     if not access_token:
         return pd.DataFrame()
 
-    # Endpoint untuk mengambil data sebagai CSV
-    api_url = f"https://sheet.zoho.com/api/v2/{workbook_id}/data/{worksheet_name}"
+    # --- ENDPOINT YANG SUDAH DIKOREKSI ---
+    # Menggunakan endpoint /rows yang lebih spesifik
+    api_url = f"https://sheet.zoho.com/api/v2/workbooks/{workbook_id}/worksheets/{worksheet_name}/rows"
     
     headers = {
         "Authorization": f"Zoho-oauthtoken {access_token}",
-        "Accept": "text/csv" # Minta respons dalam format CSV
+        "Accept": "text/csv" 
     }
 
     try:
         data_response = requests.get(api_url, headers=headers)
-        data_response.raise_for_status()
+        data_response.raise_for_status() # Cek status 4xx/5xx
         
         # Baca data CSV langsung ke Pandas DataFrame
         csv_data = StringIO(data_response.text)
-        # Gunakan header=None karena data yang diambil adalah nilai-nilai sel,
-        # dan kita asumsikan struktur datanya sudah diketahui.
-        # Anda mungkin perlu menyesuaikan pemetaan kolom di bawah!
-        df = pd.read_csv(csv_data, header=None) 
-
-        # Asumsi kolom (sesuaikan dengan Worksheet "CARI DATA" Anda!):
-        # Kolom 0: NAMA, Kolom 1: BULAN, Kolom 2: JUMAT KE, Kolom 3: TANGGUNGAN, dst.
-        
-        # NOTE: Jika data Anda memiliki header di baris pertama, gunakan header=0 di pd.read_csv
-        # dan ubah index kolom di bawah. 
-        # Karena kita berasumsi data sheet di "CARI DATA" berisi output yang Anda inginkan:
-        
-        # Kita perlu mengasumsikan kolom di sheet yang digunakan untuk PENCARIAN
+        # Asumsikan baris pertama adalah header
+        df = pd.read_csv(csv_data) 
         
         return df
 
     except requests.exceptions.RequestException as e:
         st.error(f"Gagal mengambil data dari Zoho Sheet: {e}")
-        st.json(data_response.text) # Tampilkan respons error API jika ada
+        st.error(f"URL yang dicoba: {api_url}")
+        
+        # Coba tampilkan pesan error API dari Zoho
+        try:
+            st.json(data_response.json())
+        except:
+             st.info("Pastikan nama Worksheet dan Workbook ID sudah benar. Coba cek izin berbagi Zoho Sheet.")
+        
         return pd.DataFrame()
 
-# --- 2. FUNGSI INPUT DATA KE ZOHO SHEET (Opsional tapi penting) ---
+# --- 2. FUNGSI INPUT DATA KE ZOHO SHEET (Placeholder) ---
 
-def input_data_to_zoho(workbook_id, worksheet_name, data_to_insert):
-    """Mengirim data baru ke Zoho Sheet menggunakan API."""
-    access_token = get_access_token()
-    if not access_token:
-        return False, "Gagal mendapatkan Access Token."
-
-    url = f"https://sheet.zoho.com/api/v2/workbooks/{workbook_id}/worksheets/{worksheet_name}/rows"
+def input_data_to_zoho(workbook_id, target_worksheet_name, data_to_insert):
+    # Implementasi ini membutuhkan WorkSheet tujuan yang berbeda,
+    # misalnya 'INPUT TRANSAKSI' yang terpisah dari 'CARI DATA'
     
-    headers = {
-        "Authorization": f"Zoho-oauthtoken {access_token}",
-        "Content-Type": "application/json"
-    }
-
-    # Format data yang akan diinsert (ini contoh, harus sesuai dengan kolom sheet Anda)
-    payload = {
-        "data": [data_to_insert], 
-        "skip_row_header": True
-    }
-
-    try:
-        response = requests.post(url, headers=headers, data=json.dumps(payload))
-        response.raise_for_status()
-        
-        if response.status_code == 200:
-            return True, "Data berhasil diinput ke Zoho Sheet!"
-        else:
-            return False, f"Gagal input data. Status: {response.status_code}"
-
-    except requests.exceptions.RequestException as e:
-        return False, f"Error saat input data API: {e}"
+    # --- Kode Input Data akan diletakkan di sini ---
+    st.warning("Fungsi Input Data saat ini dinonaktifkan. Perlu WorkSheet tujuan dan pemetaan kolom.")
+    
+    # Contoh data_to_insert: {"col1": "value1", "col2": "value2"}
+    # return success, message 
+    return False, "Input dinonaktifkan"
 
 
 # --- 3. LAYOUT APLIKASI STREAMLIT UTAMA ---
@@ -123,22 +103,21 @@ def app_layout(df):
     st.title("💰 Pencarian dan Input Data Infaq Arrahman")
     st.markdown("---")
 
+    # Ambil nilai unik untuk dropdown dari DataFrame yang dimuat
+    # Hati-hati: Asumsi di bawah adalah NAMA, BULAN, JUMAT KE adalah 3 kolom pertama di sheet Anda.
+    try:
+        nama_options = df.iloc[:, 0].dropna().unique().tolist()
+        bulan_options = df.iloc[:, 1].dropna().unique().tolist()
+        jumat_options = df.iloc[:, 2].dropna().unique().tolist()
+    except IndexError:
+        st.warning("Gagal mengidentifikasi kolom NAMA, BULAN, JUMAT KE. Menggunakan nilai default.")
+        nama_options = ["SUMARNO", "SANTUN", "LAINNYA"] 
+        bulan_options = ["JANUARI", "FEBRUARI", "AGUSTUS", "OKTOBER"]
+        jumat_options = [1, 2, 3, 4, 5]
+
+
     # --- Bagian A: PENCARIAN TANGGUNGAN INFAQ ---
     
-    # Asumsi data di worksheet CARI DATA Anda memiliki 3 kolom pertama sebagai input (Nama, Bulan, Jumat Ke)
-    # dan sisanya sebagai output (Tanggungan, Total Setahun, dll).
-    
-    # Ambil nilai unik untuk dropdown (Asumsi: di sheet CARI DATA sudah ada semua pilihan)
-    # Anda harus mengasumsikan data kolom yang berisi NAMA, BULAN, JUMAT KE
-    
-    # Karena kita tidak tahu persis struktur kolom di sheet CARI DATA, kita akan membuat dropdown dummy
-    # yang nilainya *mungkin* ada di worksheet Anda untuk pencarian (dropdown filter).
-    
-    # *Anda harus mengganti list ini dengan nilai unik dari kolom NAMA, BULAN, JUMAT KE di sheet Anda.*
-    nama_options = ["SUMARNO", "SANTUN", "Nama Lain 1", "Nama Lain 2"] 
-    bulan_options = ["JANUARI", "FEBRUARI", "AGUSTUS", "OKTOBER"]
-    jumat_options = [1, 2, 3, 4, 5]
-
     st.header("PENCARIAN TANGGUNGAN INFAQ")
 
     col1, col2, col3 = st.columns(3)
@@ -150,22 +129,44 @@ def app_layout(df):
     with col3:
         selected_jumat_cari = st.selectbox("JUMAT KE", options=jumat_options, key="jumat_cari")
     
+    # --- Logika Pencarian Data ---
+    
+    # Catatan: Logika pencarian di bawah ini HANYA AKAN BERFUNGSI jika data sudah termuat
+    
+    # Asumsi: Kolom Tanggungan dan Total Setahun berada di kolom berikutnya
+    
+    # Filter DataFrame berdasarkan pilihan pengguna (Asumsi nama kolom di DF Anda)
+    try:
+        # PENTING: Ganti 'Nama', 'Bulan', 'Jumat Ke' dengan nama kolom ACTUAL di Zoho Sheet Anda!
+        filtered_data = df[
+            (df[df.columns[0]].astype(str) == str(selected_nama_cari)) &
+            (df[df.columns[1]].astype(str) == str(selected_bulan_cari)) &
+            (df[df.columns[2]].astype(str) == str(selected_jumat_cari))
+        ]
+        
+        if not filtered_data.empty:
+            # Asumsi Tanggungan di Kolom ke-4 (Index 3) dan Total Setahun di Kolom ke-5 (Index 4)
+            tanggungan_val = filtered_data.iloc[0, 3] 
+            total_setahun_val = filtered_data.iloc[0, 4]
+        else:
+            tanggungan_val = "Data Tidak Ditemukan"
+            total_setahun_val = "-"
+            
+    except Exception as e:
+        st.error(f"Error saat memfilter data: {e}")
+        tanggungan_val = "Error Filter"
+        total_setahun_val = "Error Filter"
+
+
+    # Tampilkan Hasil dalam format yang menarik
+    
     st.markdown("---")
-
-    # --- Simulasi Pencarian Data ---
     
-    # Dalam aplikasi nyata, Anda akan memfilter 'df' berdasarkan selected_nama_cari, dll.
-    # Karena data yang Anda berikan adalah screenshot, kita akan meniru hasilnya.
-    # Anda perlu mengimplementasikan logika filtering Pandas di sini:
-    # filtered_data = df[(df['NAMA'] == selected_nama_cari) & (df['BULAN'] == selected_bulan_cari) & (df['JUMAT KE'] == selected_jumat_cari)]
-    
-    # KARENA KITA TIDAK TAHU STRUKTUR KOLOM: kita tampilkan data simulasi
-    tanggungan_val = "LUNAS" if selected_nama_cari == "SUMARNO" else "Rp -87000"
-    total_setahun_val = "Rp -20000" if selected_nama_cari == "SUMARNO" else "Rp 1500000"
-
-    # Gunakan layout kotak menarik seperti gambar
-    st.markdown(f"**TANGGUNGAN:** &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`{tanggungan_val}`")
-    st.markdown(f"**TOTAL SETAHUN:** &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`{total_setahun_val}`")
+    # Menggunakan container untuk visualisasi kotak
+    with st.container(border=True):
+        st.subheader("HASIL PENCARIAN")
+        st.markdown(f"**TANGGUNGAN:** &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`{tanggungan_val}`")
+        st.markdown(f"**TOTAL SETAHUN:** &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`{total_setahun_val}`")
     
     st.markdown("---")
 
@@ -179,52 +180,41 @@ def app_layout(df):
         col4, col5 = st.columns(2)
         
         with col4:
-            nama_input = st.selectbox("NAMA", options=nama_options, key="nama_input", help="Pilih nama yang akan menginput infaq.")
+            nama_input = st.selectbox("NAMA", options=nama_options, key="nama_input")
             bulan_input = st.selectbox("BULAN", options=bulan_options, key="bulan_input")
             jumlah_bayar = st.number_input("JUMLAH BAYAR (Opsional)", min_value=0, value=0)
             
         with col5:
             jumat_input = st.selectbox("JUMAT KE", options=jumat_options, key="jumat_input")
             jumlah_infaq = st.number_input("JUMLAH INFAQ", min_value=0, value=0)
-            tanggungan_input = st.text_input("TANGGUNGAN (dari hasil pencarian)", value=tanggungan_val, disabled=True)
+            # Nilai Tanggungan diisi otomatis dari hasil pencarian
+            st.text_input("TANGGUNGAN (dari hasil pencarian)", value=tanggungan_val, disabled=True) 
             input_data = st.number_input("INPUT DATA (Angka yang akan diinput)", min_value=0, value=0)
 
         st.markdown("")
         submitted = st.form_submit_button("INPUT")
         
         if submitted:
-            st.warning("Fungsi input belum diaktifkan. Anda harus mengetahui urutan kolom yang tepat di Sheet Tujuan.")
-            # Data yang akan diinput ke Sheet Tujuan Anda (misalnya: Sheet 'Transaksi')
-            # data_payload = {
-            #     "Nama": nama_input,
-            #     "Bulan": bulan_input,
-            #     "Jumat Ke": jumat_input,
-            #     "Jumlah Bayar": jumlah_bayar,
-            #     "Jumlah Infaq": jumlah_infaq,
-            #     "Tanggungan": tanggungan_input,
-            #     "Input Data": input_data
-            # }
-            
-            # success, message = input_data_to_zoho(WORKBOOK_ID, "NAMA_SHEET_TUJUAN", data_payload) 
-            # if success:
-            #     st.success(message)
-            # else:
-            #     st.error(message)
+            success, message = input_data_to_zoho(st.secrets["zoho_api"]["workbook_id"], "NAMA_SHEET_TUJUAN", None) 
+            if success:
+                st.success(message)
+            else:
+                st.error(message)
 
 
 def main():
-    # Mengambil ID Workbook dari konstanta di atas
-    workbook_id = WORKBOOK_ID 
-    worksheet_name = WORKSHEET_NAME
+    # Ambil ID Workbook dari secrets
+    workbook_id = st.secrets["zoho_api"]["workbook_id"] 
     
     # Ambil data dari Zoho Sheet
-    data_df = fetch_zoho_data(workbook_id, worksheet_name)
+    data_df = fetch_zoho_data(workbook_id, WORKSHEET_NAME)
     
     if not data_df.empty:
+        # Jika berhasil memuat, lanjutkan ke layout
+        st.success(f"Data Worksheet '{WORKSHEET_NAME}' berhasil dimuat. ({len(data_df)} baris)")
         app_layout(data_df)
     else:
-        st.error("Gagal memuat data dari Zoho Sheet. Cek kredensial dan koneksi.")
+        st.error("Gagal memuat data dari Zoho Sheet. Cek kredensial, koneksi, dan nama Worksheet/Workbook ID.")
 
 if __name__ == "__main__":
-
     main()
