@@ -11,9 +11,8 @@ st.set_page_config(layout="centered")
 # --------------------------------------------------
 
 # --- Kredensial dan Konstanta ---
-# SUMBER DATA UTAMA (Database Transaksi)
 WORKSHEET_NAME_DB = "DBBAYAR" 
-WORKSHEET_NAME_INPUT = "PEMBAYARAN INFAQ" # Asumsi worksheet tujuan input 
+WORKSHEET_NAME_INPUT = "PEMBAYARAN INFAQ" 
 
 # --- 1. FUNGSI PENANGANAN ZOHO API ---
 
@@ -46,25 +45,28 @@ def get_access_token():
 
 @st.cache_data(ttl=600) 
 def fetch_zoho_data(workbook_id, worksheet_name):
-    """Mengambil data dari Zoho Sheet sebagai Pandas DataFrame dari WORKSHEET_NAME_DB."""
-    access_token = get_access_token()
+    """Mengambil data dari Zoho Sheet sebagai Pandas DataFrame dari WORKSHEET_NAME_DB.
+    Mode ini MENGUJI AKSES PUBLIK (tanpa header Authorization).
+    """
+    
+    # Ambil Access Token. Token ini TIDAK digunakan di header untuk pengujian ini.
+    access_token = get_access_token() 
     if not access_token:
-        return pd.DataFrame()
+        st.warning("Token gagal diperoleh. Melanjutkan tes akses publik...")
 
-    # Menggunakan endpoint /rows yang spesifik dan terbukti lebih andal
+    # Menggunakan endpoint /rows yang spesifik
     api_url = f"https://sheet.zoho.com/api/v2/workbooks/{workbook_id}/worksheets/{worksheet_name}/rows"
     
     headers = {
-        "Authorization": f"Zoho-oauthtoken {access_token}",
+        # HEADER AUTHORIZATION DIHAPUS UNTUK MENGUJI JIKA WORKBOOK PUBLIK BEKERJA
         "Accept": "text/csv" 
     }
 
     try:
         data_response = requests.get(api_url, headers=headers)
-        data_response.raise_for_status() # Cek status 4xx/5xx
+        data_response.raise_for_status() 
         
         csv_data = StringIO(data_response.text)
-        # Asumsikan baris pertama di DB BAYAR adalah header
         df = pd.read_csv(csv_data) 
         
         return df
@@ -74,10 +76,9 @@ def fetch_zoho_data(workbook_id, worksheet_name):
         st.error(f"URL yang dicoba: {api_url}")
         
         try:
-            # Coba tampilkan pesan error API dari Zoho
             st.json(json.loads(data_response.text))
         except:
-             st.info("Pastikan nama Worksheet DB BAYAR dan Workbook ID sudah benar. Cek izin berbagi.")
+             st.info("Pastikan Worksheet DBBAYAR benar-benar dapat diakses publik.")
         
         return pd.DataFrame()
 
@@ -85,7 +86,7 @@ def fetch_zoho_data(workbook_id, worksheet_name):
 
 def input_data_to_zoho(workbook_id, target_worksheet_name, data_payload):
     """Placeholder untuk fungsi input data."""
-    st.warning("Fungsi Input Data saat ini dinonaktifkan. Silakan sesuaikan pemetaan kolom untuk Worksheet Tujuan.")
+    st.warning("Fungsi Input Data saat ini dinonaktifkan.")
     return False, "Input dinonaktifkan"
 
 
@@ -96,14 +97,13 @@ def app_layout(df):
     st.title("💰 Pencarian dan Input Data Infaq Arrahman")
     st.markdown("---")
 
-    # Ambil nilai unik untuk dropdown dari DataFrame (DB BAYAR)
+    # Ambil nilai unik untuk dropdown dari DataFrame (DBBAYAR)
     try:
-        # PENTING: Asumsi kolom index (0, 1, 2) di DB BAYAR adalah NAMA, BULAN, JUMAT KE
         nama_options = df.iloc[:, 0].dropna().unique().tolist()
         bulan_options = df.iloc[:, 1].dropna().unique().tolist()
         jumat_options = df.iloc[:, 2].dropna().unique().tolist()
     except IndexError:
-        st.warning("Gagal mengidentifikasi kolom NAMA, BULAN, JUMAT KE di DB BAYAR. Menggunakan nilai default.")
+        st.warning("Gagal mengidentifikasi kolom NAMA, BULAN, JUMAT KE. Menggunakan nilai default.")
         nama_options = ["SUMARNO", "SANTUN", "LAINNYA"] 
         bulan_options = ["JANUARI", "FEBRUARI", "AGUSTUS", "OKTOBER"]
         jumat_options = [1, 2, 3, 4, 5]
@@ -121,7 +121,7 @@ def app_layout(df):
     with col3:
         selected_jumat_cari = st.selectbox("JUMAT KE", options=jumat_options, key="jumat_cari")
     
-    # --- Logika Pencarian Data (Filter DB BAYAR) ---
+    # --- Logika Pencarian Data (Filter DBBAYAR) ---
     
     tanggungan_val = "Data Tidak Ditemukan"
     total_setahun_val = "-"
@@ -134,8 +134,7 @@ def app_layout(df):
         ]
         
         if not filtered_data.empty:
-            # Asumsi Tanggungan di Kolom ke-4 (Index 3) dan Total Setahun di Kolom ke-5 (Index 4)
-            # SESUAIKAN INDEX KOLOM (3 dan 4) JIKA TIDAK TEPAT
+            # SESUAIKAN INDEX KOLOM BERIKUT DENGAN POSISI TANGGUNGAN DAN TOTAL SETAHUN DI DBBAYAR!
             tanggungan_val = filtered_data.iloc[0, 3] 
             total_setahun_val = filtered_data.iloc[0, 4]
         
@@ -172,8 +171,7 @@ def app_layout(df):
         submitted = st.form_submit_button("INPUT")
         
         if submitted:
-            # Input data akan diarahkan ke worksheet lain
-            # Payload data yang akan dikirim (contoh)
+            # Data payload (contoh)
             data_payload = {
                 "Nama": nama_input,
                 "Bulan": bulan_input,
@@ -184,7 +182,7 @@ def app_layout(df):
             if success:
                 st.success(message)
                 time.sleep(1)
-                st.experimental_rerun() # Rerun untuk membersihkan form atau update data
+                st.experimental_rerun() 
             else:
                 st.error(message)
 
@@ -192,7 +190,7 @@ def app_layout(df):
 def main():
     workbook_id = st.secrets["zoho_api"]["workbook_id"] 
     
-    # Mengambil data dari DB BAYAR
+    # Mengambil data dari DBBAYAR
     data_df = fetch_zoho_data(workbook_id, WORKSHEET_NAME_DB)
     
     if not data_df.empty:
@@ -203,4 +201,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
