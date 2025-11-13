@@ -6,7 +6,6 @@ import json
 import time
 
 # --- PENTING: st.set_page_config HARUS DI SINI! ---
-# Menghapus 'title' karena versi Streamlit di Cloud Anda tidak mendukungnya
 st.set_page_config(layout="centered")
 # --------------------------------------------------
 
@@ -45,20 +44,18 @@ def get_access_token():
 
 @st.cache_data(ttl=600) 
 def fetch_zoho_data(workbook_id, worksheet_name):
-    """Mengambil data dari Zoho Sheet sebagai Pandas DataFrame dari WORKSHEET_NAME_DB.
-    Mode ini MENGUJI AKSES PUBLIK (tanpa header Authorization).
-    """
+    """Mengambil data dari Zoho Sheet sebagai Pandas DataFrame menggunakan endpoint /content."""
     
-    # Ambil Access Token. Token ini TIDAK digunakan di header untuk pengujian ini.
     access_token = get_access_token() 
     if not access_token:
-        st.warning("Token gagal diperoleh. Melanjutkan tes akses publik...")
+        return pd.DataFrame() 
 
-    # Menggunakan endpoint /rows yang spesifik
-    api_url = f"https://sheet.zoho.com/api/v2/workbooks/{workbook_id}/worksheets/{worksheet_name}/rows"
+    # --- ENDPOINT FINAL: Menggunakan /content untuk mengambil seluruh sheet ---
+    api_url = f"https://sheet.zoho.com/api/v2/workbooks/{workbook_id}/worksheets/{worksheet_name}/content"
     
     headers = {
-        # HEADER AUTHORIZATION DIHAPUS UNTUK MENGUJI JIKA WORKBOOK PUBLIK BEKERJA
+        # HEADER AUTHORIZATION WAJIB DIKEMBALIKAN
+        "Authorization": f"Zoho-oauthtoken {access_token}", 
         "Accept": "text/csv" 
     }
 
@@ -67,6 +64,7 @@ def fetch_zoho_data(workbook_id, worksheet_name):
         data_response.raise_for_status() 
         
         csv_data = StringIO(data_response.text)
+        # Asumsikan baris pertama adalah header
         df = pd.read_csv(csv_data) 
         
         return df
@@ -78,7 +76,7 @@ def fetch_zoho_data(workbook_id, worksheet_name):
         try:
             st.json(json.loads(data_response.text))
         except:
-             st.info("Pastikan Worksheet DBBAYAR benar-benar dapat diakses publik.")
+             st.info("Pastikan nama Worksheet DBBAYAR sudah benar dan izin sharing sudah terbuka.")
         
         return pd.DataFrame()
 
@@ -171,7 +169,6 @@ def app_layout(df):
         submitted = st.form_submit_button("INPUT")
         
         if submitted:
-            # Data payload (contoh)
             data_payload = {
                 "Nama": nama_input,
                 "Bulan": bulan_input,
